@@ -515,7 +515,45 @@ class iyzicocheckoutformGateway {
             $product_detail->setItemType($request_type);
             $product_detail->setPrice(round($product_final_price, 2));
             $cart_total += round($product_final_price, 2);
-            $product_detail->setSubMerchantKey("wOhytKzlK1n943YV4WT6kGizI9E=");
+            $themerchantid = get_post_field( 'post_author', $item['product_id'] );
+            $themerchantkey = get_user_meta($themerchantid,"_merchantkey",true);
+            if($themerchantkey){
+                $product_detail->setSubMerchantKey($themerchantkey);
+            }else{
+                $userid = $themerchantid;
+                $address = $this->UsersGetAddress($userid);
+                $userdata = get_userdata($userid);
+                $bankinfo = get_user_meta($userid,"_bankinfo",true);
+                if($userdata->first_name == ""){
+                    $userdata->first_name = get_user_meta( $userdata->ID, 'shipping_first_name', true );
+                }
+                if($userdata->last_name == ""){
+                    $userdata->last_name = get_user_meta( $userdata->ID, 'shipping_last_name', true );
+                }
+                $identitynumber = "TCKN".md5($userdata->ID);
+
+                # create request class
+                $request = new \Iyzipay\Request\CreateSubMerchantRequest();
+                # tracking
+                $request->setLocale(\Iyzipay\Model\Locale::TR);
+                $request->setConversationId("merchant_".$userdata->ID);
+                # new data
+                $request->setSubMerchantExternalId("U".$userdata->ID);
+                $request->setSubMerchantType(\Iyzipay\Model\SubMerchantType::PERSONAL);
+                $request->setAddress($address);
+                $request->setContactName($userdata->first_name);
+                $request->setContactSurname($userdata->last_name);
+                $request->setEmail($userdata->user_email);
+                $request->setGsmNumber("+905350000000");
+                $request->setName($userdata->first_name." ".$userdata->last_name." Dükkanı");
+                $request->setIban($bankinfo[0]["iban"]);
+                $request->setIdentityNumber($identitynumber);
+
+                # make request
+                $themerchant =  \Iyzipay\Model\SubMerchant::create($request, $configuration);
+                $product_detail->setSubMerchantKey($themerchant->getSubMerchantKey());
+
+            }
             $product_detail->setSubMerchantPrice(round($cart_total * 0.9, 2));
             
             if($product_final_price > 0) {
